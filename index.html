@@ -4,31 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Prompt Is Right! - AI Prompting Game</title>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
     // ============================================================
-    // FIREBASE CONFIGURATION
-    // To set up your own Firebase Realtime Database:
-    // 1. Go to https://console.firebase.google.com/
-    // 2. Create a new project (free tier is sufficient)
-    // 3. Go to Build > Realtime Database > Create Database
-    // 4. Set security rules to:
-    //    { "rules": { "leaderboard": { ".read": true, ".write": true } } }
-    // 5. Copy your config values below from Project Settings > General > Your apps > Web app
+    // SUPABASE CONFIGURATION
+    // 1. Go to https://supabase.com/ and create a free project
+    // 2. Go to SQL Editor and run:
+    //    create table leaderboard (
+    //      id uuid default gen_random_uuid() primary key,
+    //      name text not null,
+    //      score int not null default 0,
+    //      rounds_played int not null default 0,
+    //      created_at timestamptz default now(),
+    //      updated_at timestamptz default now()
+    //    );
+    //    alter table leaderboard enable row level security;
+    //    create policy "Public read" on leaderboard for select using (true);
+    //    create policy "Public insert" on leaderboard for insert with check (true);
+    //    create policy "Public update" on leaderboard for update using (true);
+    //    create policy "Public delete" on leaderboard for delete using (true);
+    // 3. Enable Realtime for the leaderboard table:
+    //    Go to Database > Replication, and toggle on the "leaderboard" table
+    // 4. Copy your URL and anon key from Settings > API
     // ============================================================
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-      projectId: "YOUR_PROJECT",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
-
-    const firebaseApp = firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    const SUPABASE_URL = "YOUR_SUPABASE_URL";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </script>
   <style>
     :root {
@@ -1308,8 +1309,9 @@
         this.clickCount = 0;
         this.clickTimeout = null;
 
-        // Listen for real-time leaderboard updates from Firebase
-        this.setupFirebaseListener();
+        // Listen for real-time leaderboard updates from Supabase
+        this.fetchLeaderboard();
+        this.setupRealtimeListener();
 
         // Listen for 5 clicks on logo for facilitator mode
         document.getElementById("screen-welcome").addEventListener("click", (e) => {
@@ -1324,18 +1326,23 @@
         });
       }
 
-      setupFirebaseListener() {
-        const ref = db.ref("leaderboard");
-        ref.orderByChild("score").on("value", (snapshot) => {
-          const entries = [];
-          snapshot.forEach((child) => {
-            entries.push({ key: child.key, ...child.val() });
-          });
-          // Sort descending by score, keep top 50
-          entries.sort((a, b) => b.score - a.score);
-          this.leaderboard = entries.slice(0, 50);
-          this.renderPublicLeaderboard();
-        });
+      async fetchLeaderboard() {
+        const { data } = await supabase
+          .from("leaderboard")
+          .select("*")
+          .order("score", { ascending: false })
+          .limit(50);
+        this.leaderboard = data || [];
+        this.renderPublicLeaderboard();
+      }
+
+      setupRealtimeListener() {
+        supabase
+          .channel("leaderboard-changes")
+          .on("postgres_changes", { event: "*", schema: "public", table: "leaderboard" }, () => {
+            this.fetchLeaderboard();
+          })
+          .subscribe();
       }
 
       handleLogoClick() {
@@ -1469,7 +1476,7 @@
         this.totalScore += score;
 
         // Update leaderboard after every round
-        this.saveToFirebase(this.playerName, this.totalScore, this.scores.length);
+        this.saveToSupabase(this.playerName, this.totalScore, this.scores.length);
 
         this.showScoreReveal(score);
       }
@@ -1652,7 +1659,7 @@
 
       goToFacilitator() {
         this.showScreen("screen-facilitator");
-        // Sync facilitator view with Firebase data
+        // Sync facilitator view with shared data
         this.facilitatorPlayers = this.leaderboard.map(p => ({ name: p.name, score: p.score }));
         this.renderLeaderboard();
       }
@@ -1666,8 +1673,8 @@
         this.facilitatorPlayers.push({ name, score });
         this.facilitatorPlayers.sort((a, b) => b.score - a.score);
 
-        // Save to Firebase
-        this.saveToFirebase(name, score, 4);
+        // Save to Supabase
+        this.saveToSupabase(name, score, 4);
 
         document.getElementById("facilName").value = "";
         document.getElementById("facilScore").value = "";
@@ -1720,7 +1727,7 @@
           () => {
             this.facilitatorPlayers = [];
             this.leaderboard = [];
-            db.ref("leaderboard").remove();
+            supabase.from("leaderboard").delete().neq("id", "00000000-0000-0000-0000-000000000000");
             this.renderLeaderboard();
           }
         );
@@ -1756,26 +1763,20 @@
         this.closeModal();
       }
 
-      // Firebase leaderboard methods
-      saveToFirebase(name, score, roundsPlayed) {
+      // Supabase leaderboard methods
+      async saveToSupabase(name, score, roundsPlayed) {
         if (this.playerId) {
-          // Update existing entry for this player session
-          db.ref("leaderboard/" + this.playerId).update({
-            name,
-            score,
-            roundsPlayed,
-            updatedAt: new Date().toISOString()
-          });
+          await supabase
+            .from("leaderboard")
+            .update({ name, score, rounds_played: roundsPlayed, updated_at: new Date().toISOString() })
+            .eq("id", this.playerId);
         } else {
-          // Create new entry
-          const newRef = db.ref("leaderboard").push({
-            name,
-            score,
-            roundsPlayed,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
-          this.playerId = newRef.key;
+          const { data } = await supabase
+            .from("leaderboard")
+            .insert({ name, score, rounds_played: roundsPlayed })
+            .select("id")
+            .single();
+          if (data) this.playerId = data.id;
         }
       }
 
@@ -1802,8 +1803,8 @@
           else if (i === 1) rankClass = "second";
           else if (i === 2) rankClass = "third";
 
-          const roundLabel = player.roundsPlayed < 4
-            ? ` <span style="font-size: 11px; color: var(--text-secondary);">(R${player.roundsPlayed}/4)</span>`
+          const roundLabel = player.rounds_played < 4
+            ? ` <span style="font-size: 11px; color: var(--text-secondary);">(R${player.rounds_played}/4)</span>`
             : "";
 
           html += `
