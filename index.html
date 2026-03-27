@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Prompt Is Right! - AI Prompting Game</title>
+  <style>
+    :root {
+      --bg-primary: #0F172A;
+      --bg-secondary: #1E293B;
+      --bg-light: #F8FAFC;
+      --accent-primary: #3B82F6;
+      --accent-warm: #F59E0B;
+      --accent-success: #10B981;
+      --accent-danger: #EF4444;
+      --text-primary: #F1F5F9;
+      --text-secondary: #94A3B8;
+      --text-dark: #1E293B;
+      --border: #334155;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+      --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.5);
+      --transition: 200ms ease;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Layout */
+    main {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .screen {
+      display: none;
+      flex: 1;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* Typography */
+    h1 {
+      font-size: clamp(28px, 6vw, 52px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.2;
+    }
+
+    h2 {
+      font-size: clamp(22px, 5vw, 36px);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    h3 {
+      font-size: clamp(18px, 4vw, 28px);
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .label {
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .subtitle {
+      font-size: clamp(16px, 3vw, 20px);
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    p {
+      font-size: 16px;
+      line-height: 1.75;
+    }
+
+    /* Buttons */
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 16px;
+      padding: 14px 28px;
+      transition: all var(--transition);
+      min-height: 44px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button:focus-visible {
+      outline: 3px solid var(--accent-primary);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background-color: var(--accent-primary);
+      color: white;
+      padding: 16px 32px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background-color: #2563EB;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .btn-primary:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background-color: #334155;
+      border-color: var(--accent-primary);
+    }
+
+    .btn-text {
+      background: none;
+      color: var(--accent-primary);
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+
+    .btn-text:hover {
+      color: #2563EB;
+      text-decoration: underline;
+    }
+
+    .btn-block {
+      width: 100%;
+    }
+
+    /* Forms */
+    input, textarea {
+      font-family: inherit;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      font-size: 16px;
+      transition: all var(--transition);
+    }
+
+    input::placeholder, textarea::placeholder {
+      color: var(--text-secondary);
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 150px;
+      line-height: 1.75;
+    }
+
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    /* Cards */
+    .card {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-light {
+      background-color: var(--bg-light);
+      border: 1px solid #E2E8F0;
+      color: var(--text-dark);
+    }
+
+    .card-light label {
+      color: var(--text-dark);
+    }
+
+    /* Welcome Screen */
+    .screen-welcome {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      text-align: center;
+    }
+
+    .welcome-content {
+      max-width: 600px;
+    }
+
+    .welcome-title {
+      color: var(--text-primary);
+      margin: 20px 0 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .welcome-subtitle {
+      color: var(--accent-warm);
+      margin-bottom: 16px;
+      font-size: 18px;
+    }
+
+    .welcome-description {
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      line-height: 1.8;
+    }
+
+    .welcome-footer {
+      margin-top: 60px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+    }
+
+    /* Name Entry Screen */
+    .screen-name {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .name-card {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .name-card h2 {
+      margin-bottom: 32px;
+      color: var(--text-primary);
+    }
+
+    .name-input {
+      width: 100%;
+      margin-bottom: 24px;
+      font-size: 18px;
+      padding: 14px 16px;
+    }
+
+    /* Round Intro Screen */
+    .screen-round-intro {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .round-number {
+      font-size: clamp(48px, 12vw, 96px);
+      font-weight: 800;
+      letter-spacing: -2px;
+      color: var(--text-primary);
+      animation: scaleIn 0.6s ease-out;
+      margin-bottom: 16px;
+    }
+
+    @keyframes scaleIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .round-title {
+      font-size: clamp(20px, 5vw, 32px);
+      color: var(--accent-warm);
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .round-teaser {
+      color: var(--text-secondary);
+      font-size: 16px;
+      margin-bottom: 40px;
+      max-width: 500px;
+    }
+
+    .countdown-dots {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: var(--accent-primary);
+      animation: fadeOut 1s ease-in-out forwards;
+    }
+
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+      }
+    }
+
+    /* Challenge Screen */
+    .screen-challenge {
+      flex-direction: column;
+      padding: 0;
+      gap: 0;
+    }
+
+    .challenge-header {
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .challenge-header-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .header-label {
+      color: var(--text-secondary);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .header-value {
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .timer {
+      text-align: right;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .timer.warning {
+      color: var(--accent-warm);
+    }
+
+    .timer.danger {
+      color: var(--accent-danger);
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .challenge-content {
+      flex: 1;
+      padding: 32px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .scenario-card {
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+      border-radius: var(--radius);
+      padding: 28px;
+      border: 1px solid #E2E8F0;
+    }
+
+    .scenario-card h3 {
+      margin-bottom: 16px;
+      color: var(--text-dark);
+    }
+
+    .scenario-text {
+      font-size: 16px;
+      line-height: 1.75;
+      margin-bottom: 16px;
+    }
+
+    .highlight {
+      background-color: rgba(245, 158, 11, 0.15);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+
+    .prompt-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .prompt-label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .prompt-textarea {
+      flex: 1;
+      min-height: 140px;
+      margin-bottom: 12px;
+    }
+
+    .word-counter {
+      text-align: right;
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin-bottom: 20px;
+    }
+
+    .challenge-footer {
+      padding: 0 20px 20px;
+    }
+
+    /* Score Reveal Screen */
+    .screen-score {
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 40px 20px;
+      gap: 32px;
+      overflow-y: auto;
+    }
+
+    .score-display {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .score-label {
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    .score-number {
+      font-size: clamp(48px, 12vw, 96px);
+      font-weight: 800;
+      letter-spacing: -2px;
+      animation: countUp 0.8s ease-out;
+      margin-bottom: 8px;
+    }
+
+    @keyframes countUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .score-color-green {
+      color: var(--accent-success);
+    }
+
+    .score-color-amber {
+      color: var(--accent-warm);
+    }
+
+    .score-color-red {
+      color: var(--accent-danger);
+    }
+
+    .score-out-of {
+      color: var(--text-secondary);
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .score-rating {
+      color: var(--text-secondary);
+      font-size: 18px;
+      margin-top: 12px;
+      font-weight: 600;
+    }
+
+    .criteria-container {
+      width: 100%;
+      max-width: 600px;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .criterion-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .criterion-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .criterion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .criterion-label {
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .criterion-score {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .criterion-bar {
+      height: 8px;
+      background-color: var(--bg-primary);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .criterion-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 4px;
+      animation: fillBar 0.6s ease-out forwards;
+    }
+
+    @keyframes fillBar {
+      to {
+        width: var(--fill-width);
+      }
+    }
+
+    .fill-green {
+      background-color: var(--accent-success);
+    }
+
+    .fill-amber {
+      background-color: var(--accent-warm);
+    }
+
+    .fill-red {
+      background-color: var(--accent-danger);
+    }
+
+    .pro-tip {
+      width: 100%;
+      max-width: 600px;
+      background-color: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 32px;
+    }
+
+    .pro-tip-title {
+      color: var(--accent-warm);
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pro-tip-text {
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* Final Results Screen */
+    .screen-results {
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 40px 20px;
+      gap: 32px;
+      overflow-y: auto;
+    }
+
+    .final-score-display {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .final-score-number {
+      font-size: clamp(52px, 14vw, 120px);
+      font-weight: 800;
+      letter-spacing: -2px;
+      animation: countUp 1s ease-out;
+      margin-bottom: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 32px;
+      margin: 20px 0;
+      animation: scaleIn 0.6s ease-out 0.3s both;
+    }
+
+    .badge-gold {
+      background-color: rgba(245, 158, 11, 0.2);
+      color: var(--accent-warm);
+      border: 3px solid var(--accent-warm);
+    }
+
+    .badge-silver {
+      background-color: rgba(203, 213, 225, 0.2);
+      color: #CBD5E1;
+      border: 3px solid #CBD5E1;
+    }
+
+    .badge-bronze {
+      background-color: rgba(217, 119, 6, 0.2);
+      color: #D97706;
+      border: 3px solid #D97706;
+    }
+
+    .badge-starter {
+      background-color: rgba(59, 130, 246, 0.2);
+      color: var(--accent-primary);
+      border: 3px solid var(--accent-primary);
+    }
+
+    .badge-title {
+      color: var(--text-primary);
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .breakdown-table {
+      width: 100%;
+      max-width: 600px;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .breakdown-row {
+      display: grid;
+      grid-template-columns: 80px 1fr auto;
+      gap: 16px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .breakdown-row:last-child {
+      border-bottom: none;
+    }
+
+    .breakdown-round {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .breakdown-name {
+      color: var(--text-primary);
+    }
+
+    .breakdown-score {
+      color: var(--accent-warm);
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .results-footer {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+      margin-top: 16px;
+    }
+
+    /* Facilitator Mode */
+    .screen-facilitator {
+      flex-direction: column;
+      padding: 32px 20px;
+      gap: 24px;
+      overflow-y: auto;
+    }
+
+    .facilitator-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .facilitator-header h2 {
+      margin-bottom: 8px;
+    }
+
+    .facilitator-header p {
+      color: var(--text-secondary);
+    }
+
+    .facilitator-section {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+      width: 100%;
+    }
+
+    .facilitator-section h3 {
+      margin-bottom: 20px;
+      color: var(--text-primary);
+    }
+
+    .add-player-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .add-player-form input {
+      margin: 0;
+    }
+
+    .leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .leaderboard-header {
+      display: grid;
+      grid-template-columns: 50px 1fr auto;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .leaderboard-row {
+      display: grid;
+      grid-template-columns: 50px 1fr auto;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+    }
+
+    .leaderboard-row:hover {
+      background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    .rank {
+      font-weight: 700;
+      color: var(--accent-warm);
+    }
+
+    .rank.first {
+      color: var(--accent-warm);
+    }
+
+    .rank.second {
+      color: #CBD5E1;
+    }
+
+    .rank.third {
+      color: #D97706;
+    }
+
+    .player-name {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .player-score {
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .facilitator-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+
+    .facilitator-actions button {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    /* Fullscreen Display */
+    .fullscreen-display {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      background-color: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 40px 20px;
+    }
+
+    .fullscreen-score-display {
+      text-align: center;
+    }
+
+    .fullscreen-name {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 32px;
+    }
+
+    .fullscreen-score {
+      font-size: 120px;
+      font-weight: 800;
+      color: var(--accent-warm);
+      letter-spacing: -2px;
+    }
+
+    .fullscreen-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      color: var(--text-secondary);
+      font-size: 28px;
+      padding: 8px;
+    }
+
+    .fullscreen-close:hover {
+      color: var(--text-primary);
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.6);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background-color: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 32px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--text-primary);
+    }
+
+    .modal-message {
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .modal-buttons button {
+      flex: 1;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .challenge-header {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .add-player-form {
+        grid-template-columns: 1fr;
+      }
+
+      .add-player-form button {
+        width: 100%;
+      }
+    }
+
+    /* Utilities */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .mt {
+      margin-top: 24px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <!-- Welcome Screen -->
+    <section class="screen screen-welcome active" id="screen-welcome">
+      <div class="welcome-content">
+        <div class="label">AI4EDS MODULE 2</div>
+        <h1 class="welcome-title">THE PROMPT IS RIGHT</h1>
+        <div class="welcome-subtitle">Master the art of AI prompting</div>
+        <p class="welcome-description">
+          Craft effective AI prompts in real-time scenarios. Learn what makes prompts work and compete for the top score!
+        </p>
+        <button class="btn-primary btn-block" onclick="app.goToNameEntry()">Start Playing</button>
+        <div class="welcome-footer">AI SINGAPORE × AVPN</div>
+      </div>
+    </section>
+
+    <!-- Name Entry Screen -->
+    <section class="screen screen-name" id="screen-name">
+      <div class="card name-card">
+        <h2>What's your name?</h2>
+        <div class="form-group">
+          <input
+            type="text"
+            id="playerName"
+            class="name-input"
+            placeholder="Enter your name..."
+            onkeypress="if(event.key==='Enter') app.startGame()"
+          >
+        </div>
+        <button
+          class="btn-primary btn-block"
+          id="startBtn"
+          onclick="app.startGame()"
+          disabled
+        >Let's Go!</button>
+      </div>
+    </section>
+
+    <!-- Round Intro Screen -->
+    <section class="screen screen-round-intro" id="screen-round-intro">
+      <div id="roundIntroContent"></div>
+    </section>
+
+    <!-- Challenge Screen -->
+    <section class="screen screen-challenge" id="screen-challenge">
+      <header class="challenge-header">
+        <div class="challenge-header-item">
+          <span class="header-label">Round</span>
+          <span class="header-value" id="headerRound">1 of 4</span>
+        </div>
+        <div class="challenge-header-item">
+          <span class="header-label">Player</span>
+          <span class="header-value" id="headerPlayer">Player</span>
+        </div>
+        <div class="challenge-header-item">
+          <span class="header-label">Time</span>
+          <span class="header-value timer" id="timer">1:30</span>
+        </div>
+      </header>
+
+      <div class="challenge-content">
+        <div class="scenario-card">
+          <h3 id="scenarioTitle">Scenario Title</h3>
+          <div id="scenarioText" class="scenario-text"></div>
+        </div>
+
+        <div class="prompt-section">
+          <label class="prompt-label">Write your AI prompt below</label>
+          <textarea
+            id="promptInput"
+            class="prompt-textarea"
+            placeholder="Type your prompt here..."
+            onInput="app.updateWordCount()"
+          ></textarea>
+          <div class="word-counter"><span id="wordCount">0</span> words</div>
+          <div class="challenge-footer">
+            <button class="btn-primary btn-block" onclick="app.submitPrompt()">LOCK IT IN</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Score Reveal Screen -->
+    <section class="screen screen-score" id="screen-score">
+      <div class="score-display">
+        <div class="label score-label">YOUR SCORE</div>
+        <div class="score-number" id="roundScore">0</div>
+        <span class="score-out-of">/100</span>
+        <div class="score-rating" id="scoreRating">CALCULATING...</div>
+      </div>
+
+      <div class="pro-tip">
+        <div class="pro-tip-title">💡 PRO TIP</div>
+        <div class="pro-tip-text" id="proTipText">Loading...</div>
+      </div>
+
+      <div class="criteria-container">
+        <h3>Breakdown</h3>
+        <div id="criteriaContainer"></div>
+      </div>
+
+      <div style="margin-top: 20px;">
+        <button class="btn-primary" id="nextRoundBtn" onclick="app.nextRound()">Next Round →</button>
+      </div>
+    </section>
+
+    <!-- Final Results Screen -->
+    <section class="screen screen-results" id="screen-results">
+      <div class="final-score-display">
+        <div class="label score-label">FINAL SCORE</div>
+        <div class="final-score-number" id="finalScore">0</div>
+        <span class="score-out-of">/400</span>
+        <div id="badgeContainer"></div>
+        <div class="badge-title" id="badgeTitle">PROMPT MASTER</div>
+      </div>
+
+      <div class="breakdown-table">
+        <div class="breakdown-row">
+          <div class="breakdown-round" style="font-weight: 600;">ROUND</div>
+          <div style="font-weight: 600; color: var(--text-primary);">NAME</div>
+          <div class="breakdown-score" style="font-weight: 600;">SCORE</div>
+        </div>
+        <div id="breakdownContainer"></div>
+      </div>
+
+      <div class="results-footer">
+        <button class="btn-primary" onclick="app.showFullscreen()">SHOW SCORE</button>
+        <button class="btn-text" onclick="app.reset()">Play Again</button>
+      </div>
+    </section>
+
+    <!-- Facilitator Mode -->
+    <section class="screen screen-facilitator" id="screen-facilitator">
+      <div class="facilitator-header">
+        <h2>Leaderboard Manager</h2>
+        <p>Manage players and display scores</p>
+      </div>
+
+      <div class="facilitator-section">
+        <h3>Add Player</h3>
+        <form class="add-player-form" onsubmit="event.preventDefault(); app.addFacilitatorPlayer()">
+          <input type="text" id="facilName" placeholder="Player name" required>
+          <input type="number" id="facilScore" placeholder="Score" min="0" max="400" required>
+          <button class="btn-primary" type="submit">Add</button>
+        </form>
+      </div>
+
+      <div class="facilitator-section">
+        <h3>Leaderboard</h3>
+        <div class="leaderboard-header">
+          <div>RANK</div>
+          <div>NAME</div>
+          <div>SCORE</div>
+        </div>
+        <div id="facilitatorLeaderboard"></div>
+      </div>
+
+      <div class="facilitator-section">
+        <div class="facilitator-actions">
+          <button class="btn-primary" onclick="app.showFacilitatorFullscreen()">Show Full Screen</button>
+          <button class="btn-secondary" onclick="app.confirmClearAll()">Clear All</button>
+          <button class="btn-text" onclick="app.backToWelcome()">Back to Game</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal for confirmations -->
+  <div class="modal" id="confirmModal">
+    <div class="modal-content">
+      <div class="modal-title" id="modalTitle">Confirm</div>
+      <div class="modal-message" id="modalMessage">Are you sure?</div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" onclick="app.closeModal()">Cancel</button>
+        <button class="btn-primary" id="modalConfirmBtn" onclick="app.modalConfirm()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen Display -->
+  <div class="fullscreen-display hidden" id="fullscreenDisplay">
+    <button class="fullscreen-close" onclick="app.closeFullscreen()">✕</button>
+    <div class="fullscreen-score-display">
+      <div class="fullscreen-name" id="fullscreenName">Player Name</div>
+      <div class="fullscreen-score" id="fullscreenScore">0</div>
+    </div>
+  </div>
+
+  <script>
+    // Scenarios with Singapore context
+    const scenarios = [
+      {
+        title: "The Email Crisis",
+        role: "Admin at QuickShip Logistics",
+        situation: "A shipment to ABC Trading has been delayed 3 days due to port congestion. You need to draft a sincere apology and recovery plan.",
+        keyDetails: ["QuickShip Logistics", "ABC Trading", "3 days delay", "port congestion"],
+        proTip: "Use specific apology language, acknowledge the impact, and offer concrete recovery steps."
+      },
+      {
+        title: "The Board Room Rush",
+        role: "Marketing Exec at FreshMart",
+        situation: "You have 2 hours to summarize a 25-page quarterly report into 1 page for board presentation. The board needs key metrics, trends, and recommendations.",
+        keyDetails: ["25-page report", "1-page summary", "2 hours", "board presentation", "metrics & trends"],
+        proTip: "Request output with specific sections: Key Metrics, Top Trends (3 bullets), Recommendations (3 bullets)."
+      },
+      {
+        title: "The Hawker Hero",
+        role: "Owner at Maxwell Chicken Rice Stall",
+        situation: "You have 3 months of sales data (daily revenue, ingredient costs, popular items). You need analysis to understand patterns and plan inventory for next quarter.",
+        keyDetails: ["3 months sales data", "Maxwell stall", "inventory planning", "daily revenue", "ingredient costs"],
+        proTip: "Ask for specific insights: best-selling items, sales patterns by day, ingredient optimization."
+      },
+      {
+        title: "The Community Champion",
+        role: "Tampines Community Club Coordinator",
+        situation: "You're organizing a free 'Introduction to AI for Seniors' workshop next Saturday, 10am-12pm. Create a social media post to encourage sign-ups.",
+        keyDetails: ["Tampines CC", "Free workshop", "Seniors", "AI intro", "Saturday 10am-12pm"],
+        proTip: "Make it inclusive and clear: why attend, who should come, how to sign up, any requirements."
+      }
+    ];
+
+    const proTips = [
+      "Try asking for specific sections or bullet points in your next prompt.",
+      "Add constraints like word limit or tone to guide the AI better.",
+      "Consider who will use the output and mention their expertise level.",
+      "Ask for a specific format (email, table, list) in your prompt.",
+      "Include examples of what 'good' looks like if possible."
+    ];
+
+    class PromptGame {
+      constructor() {
+        this.currentRound = 0;
+        this.playerName = "";
+        this.scores = [];
+        this.totalScore = 0;
+        this.currentPrompt = "";
+        this.timerInterval = null;
+        this.timeLeft = 90;
+        this.facilitatorPlayers = [];
+        this.modalCallback = null;
+        this.clickCount = 0;
+        this.clickTimeout = null;
+
+        // Listen for 5 clicks on logo for facilitator mode
+        document.getElementById("screen-welcome").addEventListener("click", (e) => {
+          if (e.target.closest("h1")) {
+            this.handleLogoClick();
+          }
+        });
+
+        // Input validation
+        document.getElementById("playerName").addEventListener("input", (e) => {
+          document.getElementById("startBtn").disabled = !e.target.value.trim();
+        });
+      }
+
+      handleLogoClick() {
+        this.clickCount++;
+        clearTimeout(this.clickTimeout);
+
+        if (this.clickCount === 5) {
+          this.goToFacilitator();
+          this.clickCount = 0;
+        }
+
+        this.clickTimeout = setTimeout(() => {
+          this.clickCount = 0;
+        }, 500);
+      }
+
+      goToNameEntry() {
+        this.showScreen("screen-name");
+        document.getElementById("playerName").focus();
+      }
+
+      startGame() {
+        const name = document.getElementById("playerName").value.trim();
+        if (!name) return;
+
+        this.playerName = name;
+        this.currentRound = 0;
+        this.scores = [];
+        this.totalScore = 0;
+        this.startRound();
+      }
+
+      startRound() {
+        if (this.currentRound >= 4) {
+          this.showFinalResults();
+          return;
+        }
+
+        this.showRoundIntro();
+      }
+
+      showRoundIntro() {
+        this.showScreen("screen-round-intro");
+
+        const scenario = scenarios[this.currentRound];
+        const roundNum = this.currentRound + 1;
+
+        const content = document.getElementById("roundIntroContent");
+        content.innerHTML = `
+          <div class="round-number">${roundNum}</div>
+          <div class="round-title">${scenario.title}</div>
+          <div class="round-teaser">${scenario.role}</div>
+          <div class="countdown-dots" id="dots"></div>
+        `;
+
+        let countdown = 3;
+        const dotsDiv = document.getElementById("dots");
+
+        for (let i = 0; i < 3; i++) {
+          const dot = document.createElement("div");
+          dot.className = "dot";
+          dot.style.animationDelay = `${i}s`;
+          dotsDiv.appendChild(dot);
+        }
+
+        setTimeout(() => this.showChallenge(), 3000);
+      }
+
+      showChallenge() {
+        this.showScreen("screen-challenge");
+        this.timeLeft = 90;
+        this.currentPrompt = "";
+
+        const scenario = scenarios[this.currentRound];
+
+        document.getElementById("headerRound").textContent = `${this.currentRound + 1} of 4`;
+        document.getElementById("headerPlayer").textContent = this.playerName;
+        document.getElementById("scenarioTitle").textContent = scenario.title;
+
+        // Build scenario text with highlights
+        let text = `<strong>Your Role:</strong> ${scenario.role}<br><br>`;
+        text += `<strong>The Situation:</strong> ${scenario.situation}`;
+        document.getElementById("scenarioText").innerHTML = text;
+
+        document.getElementById("promptInput").value = "";
+        document.getElementById("promptInput").focus();
+        this.updateWordCount();
+
+        this.startTimer();
+      }
+
+      startTimer() {
+        if (this.timerInterval) clearInterval(this.timerInterval);
+
+        this.timerInterval = setInterval(() => {
+          this.timeLeft--;
+
+          const minutes = Math.floor(this.timeLeft / 60);
+          const seconds = this.timeLeft % 60;
+          const display = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+
+          const timerEl = document.getElementById("timer");
+          timerEl.textContent = display;
+
+          // Color coding
+          timerEl.classList.remove("warning", "danger");
+          if (this.timeLeft < 15) {
+            timerEl.classList.add("danger");
+          } else if (this.timeLeft < 30) {
+            timerEl.classList.add("warning");
+          }
+
+          if (this.timeLeft <= 0) {
+            this.submitPrompt();
+          }
+        }, 1000);
+      }
+
+      updateWordCount() {
+        const text = document.getElementById("promptInput").value;
+        const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+        document.getElementById("wordCount").textContent = words;
+      }
+
+      submitPrompt() {
+        if (this.timerInterval) clearInterval(this.timerInterval);
+
+        this.currentPrompt = document.getElementById("promptInput").value;
+        const score = this.scorePrompt(this.currentPrompt);
+        this.scores.push(score);
+        this.totalScore += score;
+
+        this.showScoreReveal(score);
+      }
+
+      scorePrompt(prompt) {
+        const scenario = scenarios[this.currentRound];
+        let score = 0;
+
+        // Role & Context (20 points)
+        if (prompt.toLowerCase().includes(scenario.keyDetails[0].toLowerCase())) {
+          score += 8;
+        }
+        if (prompt.toLowerCase().includes("role") || prompt.includes("as")) {
+          score += 6;
+        }
+        if (prompt.toLowerCase().includes(scenario.keyDetails[1].toLowerCase())) {
+          score += 6;
+        }
+
+        // Task Clarity (20 points)
+        const actionVerbs = ["create", "write", "generate", "summarize", "analyze", "plan", "draft", "provide"];
+        if (actionVerbs.some(v => prompt.toLowerCase().includes(v))) {
+          score += 8;
+        }
+        if (prompt.toLowerCase().includes("deliverable") || prompt.toLowerCase().includes("output")) {
+          score += 6;
+        }
+        if (prompt.length > 80) {
+          score += 6;
+        }
+
+        // Key Details (20 points)
+        let detailCount = 0;
+        scenario.keyDetails.forEach(detail => {
+          if (prompt.toLowerCase().includes(detail.toLowerCase())) {
+            detailCount++;
+          }
+        });
+        score += Math.min(detailCount * 5, 20);
+
+        // Format & Structure (20 points)
+        if (prompt.toLowerCase().includes("format") || prompt.toLowerCase().includes("structure") || prompt.toLowerCase().includes("bullet") || prompt.toLowerCase().includes("section")) {
+          score += 8;
+        }
+        if (prompt.toLowerCase().includes("tone") || prompt.toLowerCase().includes("style")) {
+          score += 6;
+        }
+        if (prompt.toLowerCase().includes("length") || prompt.toLowerCase().includes("words")) {
+          score += 6;
+        }
+
+        // Pro Techniques (20 points)
+        if (prompt.toLowerCase().includes("constraint") || prompt.toLowerCase().includes("limit") || prompt.toLowerCase().includes("maximum")) {
+          score += 6;
+        }
+        if (prompt.toLowerCase().includes("audience") || prompt.toLowerCase().includes("user")) {
+          score += 6;
+        }
+        if (prompt.toLowerCase().includes("example") || prompt.toLowerCase().includes("like")) {
+          score += 4;
+        }
+        if (prompt.toLowerCase().includes("step") || prompt.toLowerCase().includes("iterate")) {
+          score += 4;
+        }
+
+        // Add randomness for demo purposes (±10%)
+        const variance = Math.floor((Math.random() - 0.5) * 20);
+        score = Math.max(0, Math.min(100, score + variance));
+
+        return Math.round(score);
+      }
+
+      showScoreReveal(score) {
+        this.showScreen("screen-score");
+
+        const color = score >= 70 ? "score-color-green" : score >= 40 ? "score-color-amber" : "score-color-red";
+        const rating = score >= 70 ? "INCREDIBLE!" : score >= 40 ? "GREAT JOB" : "KEEP TRYING";
+
+        document.getElementById("roundScore").textContent = score;
+        document.getElementById("roundScore").className = `score-number ${color}`;
+        document.getElementById("scoreRating").textContent = rating;
+
+        // Pro tip
+        const tipIndex = this.currentRound % proTips.length;
+        document.getElementById("proTipText").textContent = proTips[tipIndex];
+
+        // Criteria breakdown
+        const criteria = [
+          { name: "Role & Context", score: Math.round((score * 0.2) + Math.random() * 5) },
+          { name: "Task Clarity", score: Math.round((score * 0.2) + Math.random() * 5) },
+          { name: "Key Details", score: Math.round((score * 0.2) + Math.random() * 5) },
+          { name: "Format & Structure", score: Math.round((score * 0.2) + Math.random() * 5) },
+          { name: "Pro Techniques", score: Math.round((score * 0.2) + Math.random() * 5) }
+        ];
+
+        let criteriaHTML = "";
+        criteria.forEach(c => {
+          const percent = (c.score / 20) * 100;
+          const fillColor = c.score >= 15 ? "fill-green" : c.score >= 8 ? "fill-amber" : "fill-red";
+
+          criteriaHTML += `
+            <div class="criterion-row">
+              <div class="criterion-header">
+                <span class="criterion-label">${c.name}</span>
+                <span class="criterion-score">${c.score}/20</span>
+              </div>
+              <div class="criterion-bar">
+                <div class="criterion-fill ${fillColor}" style="--fill-width: ${percent}%"></div>
+              </div>
+            </div>
+          `;
+        });
+
+        document.getElementById("criteriaContainer").innerHTML = criteriaHTML;
+
+        // Update button text
+        const nextBtn = document.getElementById("nextRoundBtn");
+        nextBtn.textContent = this.currentRound + 1 < 4 ? "Next Round →" : "See Results";
+
+        this.currentRound++;
+      }
+
+      nextRound() {
+        this.startRound();
+      }
+
+      showFinalResults() {
+        this.showScreen("screen-results");
+
+        document.getElementById("finalScore").textContent = this.totalScore;
+        document.getElementById("finalScore").className = `final-score-number`;
+
+        // Badge
+        let badge = "🌟";
+        let badgeClass = "badge-starter";
+        let title = "AI BEGINNER";
+
+        if (this.totalScore >= 320) {
+          badge = "👑";
+          badgeClass = "badge-gold";
+          title = "PROMPT MASTER";
+        } else if (this.totalScore >= 240) {
+          badge = "⭐";
+          badgeClass = "badge-silver";
+          title = "AI POWER USER";
+        } else if (this.totalScore >= 160) {
+          badge = "🎯";
+          badgeClass = "badge-bronze";
+          title = "RISING STAR";
+        }
+
+        document.getElementById("badgeContainer").innerHTML = `<div class="badge ${badgeClass}">${badge}</div>`;
+        document.getElementById("badgeTitle").textContent = title;
+
+        // Breakdown
+        let breakdownHTML = "";
+        scenarios.forEach((scenario, i) => {
+          breakdownHTML += `
+            <div class="breakdown-row">
+              <div class="breakdown-round">Round ${i + 1}</div>
+              <div class="breakdown-name">${scenario.title}</div>
+              <div class="breakdown-score">${this.scores[i] || 0}</div>
+            </div>
+          `;
+        });
+
+        document.getElementById("breakdownContainer").innerHTML = breakdownHTML;
+      }
+
+      showFullscreen() {
+        const display = document.getElementById("fullscreenDisplay");
+        document.getElementById("fullscreenName").textContent = this.playerName;
+        document.getElementById("fullscreenScore").textContent = this.totalScore;
+        display.classList.remove("hidden");
+      }
+
+      closeFullscreen() {
+        document.getElementById("fullscreenDisplay").classList.add("hidden");
+      }
+
+      goToFacilitator() {
+        this.showScreen("screen-facilitator");
+        this.renderLeaderboard();
+      }
+
+      addFacilitatorPlayer() {
+        const name = document.getElementById("facilName").value.trim();
+        const score = parseInt(document.getElementById("facilScore").value);
+
+        if (!name || isNaN(score)) return;
+
+        this.facilitatorPlayers.push({ name, score });
+        this.facilitatorPlayers.sort((a, b) => b.score - a.score);
+
+        document.getElementById("facilName").value = "";
+        document.getElementById("facilScore").value = "";
+
+        this.renderLeaderboard();
+      }
+
+      renderLeaderboard() {
+        let html = "";
+
+        this.facilitatorPlayers.forEach((player, i) => {
+          let rankClass = "";
+          if (i === 0) rankClass = "first";
+          else if (i === 1) rankClass = "second";
+          else if (i === 2) rankClass = "third";
+
+          html += `
+            <div class="leaderboard-row">
+              <div class="rank ${rankClass}">${i + 1}</div>
+              <div class="player-name">${player.name}</div>
+              <div class="player-score">${player.score}</div>
+            </div>
+          `;
+        });
+
+        document.getElementById("facilitatorLeaderboard").innerHTML = html;
+      }
+
+      showFacilitatorFullscreen() {
+        const display = document.getElementById("fullscreenDisplay");
+        const leaderboardHTML = `
+          <div style="text-align: center;">
+            <h1 style="margin-bottom: 40px; color: var(--text-primary);">LEADERBOARD</h1>
+            ${this.facilitatorPlayers.map((p, i) => `
+              <div style="margin-bottom: 30px; font-size: 28px;">
+                <div style="color: var(--text-secondary); margin-bottom: 8px;">${i + 1}. ${p.name}</div>
+                <div style="color: var(--accent-warm); font-size: 48px; font-weight: 700;">${p.score}</div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+        display.innerHTML = `<button class="fullscreen-close" onclick="app.closeFullscreen()">✕</button>${leaderboardHTML}`;
+        display.classList.remove("hidden");
+      }
+
+      confirmClearAll() {
+        this.showModal(
+          "Clear All Players?",
+          "This will remove all players from the leaderboard.",
+          () => {
+            this.facilitatorPlayers = [];
+            this.renderLeaderboard();
+          }
+        );
+      }
+
+      backToWelcome() {
+        this.facilitatorPlayers = [];
+        this.clickCount = 0;
+        this.showScreen("screen-welcome");
+      }
+
+      reset() {
+        this.facilitatorPlayers = [];
+        this.clickCount = 0;
+        this.showScreen("screen-welcome");
+      }
+
+      showModal(title, message, callback) {
+        document.getElementById("modalTitle").textContent = title;
+        document.getElementById("modalMessage").textContent = message;
+        document.getElementById("confirmModal").classList.add("active");
+        this.modalCallback = callback;
+      }
+
+      closeModal() {
+        document.getElementById("confirmModal").classList.remove("active");
+        this.modalCallback = null;
+      }
+
+      modalConfirm() {
+        if (this.modalCallback) {
+          this.modalCallback();
+        }
+        this.closeModal();
+      }
+
+      showScreen(screenId) {
+        document.querySelectorAll(".screen").forEach(el => el.classList.remove("active"));
+        document.getElementById(screenId).classList.add("active");
+      }
+    }
+
+    const app = new PromptGame();
+  </script>
+</body>
+</html>
