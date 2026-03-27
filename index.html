@@ -1021,6 +1021,7 @@
           Craft effective AI prompts in real-time scenarios. Learn what makes prompts work and compete for the top score!
         </p>
         <button class="btn-primary btn-block" onclick="app.goToNameEntry()">Start Playing</button>
+        <button class="btn-secondary btn-block" onclick="app.viewLeaderboard()">View Leaderboard</button>
         <div class="welcome-footer">AI SINGAPORE × AVPN</div>
       </div>
     </section>
@@ -1136,7 +1137,32 @@
 
       <div class="results-footer">
         <button class="btn-primary" onclick="app.showFullscreen()">SHOW SCORE</button>
+        <button class="btn-secondary" onclick="app.viewLeaderboard()">View Leaderboard</button>
         <button class="btn-text" onclick="app.reset()">Play Again</button>
+      </div>
+    </section>
+
+    <!-- Public Leaderboard Screen -->
+    <section class="screen screen-facilitator" id="screen-leaderboard">
+      <div class="facilitator-header">
+        <h2>Leaderboard</h2>
+        <p>Top players across all sessions</p>
+      </div>
+      <div class="facilitator-section">
+        <div class="leaderboard-header">
+          <div>RANK</div>
+          <div>NAME</div>
+          <div>SCORE</div>
+        </div>
+        <div id="publicLeaderboard"></div>
+        <div id="emptyLeaderboard" style="text-align: center; padding: 40px 0; color: var(--text-secondary);">
+          No scores yet. Be the first to play!
+        </div>
+      </div>
+      <div class="facilitator-section">
+        <div class="facilitator-actions">
+          <button class="btn-text" onclick="app.backToWelcome()">Back to Game</button>
+        </div>
       </div>
     </section>
 
@@ -1248,6 +1274,8 @@
         this.timerInterval = null;
         this.timeLeft = 90;
         this.facilitatorPlayers = [];
+        this.leaderboard = this.loadLeaderboard();
+        this.sessionId = null;
         this.modalCallback = null;
         this.clickCount = 0;
         this.clickTimeout = null;
@@ -1394,7 +1422,7 @@
         const score = this.scorePrompt(this.currentPrompt);
         this.scores.push(score);
         this.totalScore += score;
-
+        this.saveToLeaderboard(this.playerName, this.totalScore, this.scores.length);
         this.showScoreReveal(score);
       }
 
@@ -1652,6 +1680,7 @@
       reset() {
         this.facilitatorPlayers = [];
         this.clickCount = 0;
+        this.sessionId = null;
         this.showScreen("screen-welcome");
       }
 
@@ -1672,6 +1701,33 @@
           this.modalCallback();
         }
         this.closeModal();
+      }
+
+      loadLeaderboard() {
+        try { return JSON.parse(localStorage.getItem("promptGameLeaderboard") || "[]"); } catch { return []; }
+      }
+
+      saveToLeaderboard(name, score, roundsPlayed) {
+        if (!this.sessionId) this.sessionId = Date.now().toString();
+        const idx = this.leaderboard.findIndex(p => p.sid === this.sessionId);
+        const entry = { name, score, roundsPlayed, sid: this.sessionId };
+        if (idx >= 0) this.leaderboard[idx] = entry; else this.leaderboard.push(entry);
+        this.leaderboard.sort((a, b) => b.score - a.score);
+        if (this.leaderboard.length > 50) this.leaderboard = this.leaderboard.slice(0, 50);
+        try { localStorage.setItem("promptGameLeaderboard", JSON.stringify(this.leaderboard)); } catch {}
+      }
+
+      viewLeaderboard() {
+        this.showScreen("screen-leaderboard");
+        const container = document.getElementById("publicLeaderboard");
+        const emptyMsg = document.getElementById("emptyLeaderboard");
+        if (this.leaderboard.length === 0) { container.innerHTML = ""; emptyMsg.style.display = "block"; return; }
+        emptyMsg.style.display = "none";
+        container.innerHTML = this.leaderboard.map((p, i) => {
+          const rc = i === 0 ? "first" : i === 1 ? "second" : i === 2 ? "third" : "";
+          const rl = p.roundsPlayed < 4 ? ` <span style="font-size:11px;color:var(--text-secondary);">(R${p.roundsPlayed}/4)</span>` : "";
+          return `<div class="leaderboard-row"><div class="rank ${rc}">${i+1}</div><div class="player-name">${p.name}${rl}</div><div class="player-score">${p.score}</div></div>`;
+        }).join("");
       }
 
       showScreen(screenId) {
