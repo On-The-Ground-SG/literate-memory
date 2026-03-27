@@ -4,6 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Prompt Is Right! - AI Prompting Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script>
+    // ============================================================
+    // SUPABASE CONFIGURATION
+    // 1. Go to https://supabase.com/ and create a free project
+    // 2. Go to SQL Editor and run:
+    //    create table leaderboard (
+    //      id uuid default gen_random_uuid() primary key,
+    //      name text not null,
+    //      score int not null default 0,
+    //      rounds_played int not null default 0,
+    //      created_at timestamptz default now(),
+    //      updated_at timestamptz default now()
+    //    );
+    //    alter table leaderboard enable row level security;
+    //    create policy "Public read" on leaderboard for select using (true);
+    //    create policy "Public insert" on leaderboard for insert with check (true);
+    //    create policy "Public update" on leaderboard for update using (true);
+    //    create policy "Public delete" on leaderboard for delete using (true);
+    // 3. Enable Realtime for the leaderboard table:
+    //    Go to Database > Replication, and toggle on the "leaderboard" table
+    // 4. Copy your URL and anon key from Settings > API
+    // ============================================================
+    const SUPABASE_URL = "https://nnbkdnswxtuckfelpuyq.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5uYmtkbnN3eHR1Y2tmZWxwdXlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxNjQ4MjQsImV4cCI6MjA4NDc0MDgyNH0.HIJErUg05lH0WipOn6OpGNwowLyMoOlJoMyN-yntaro";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  </script>
   <style>
     :root {
       --bg-primary: #0F172A;
@@ -1148,6 +1175,7 @@
         <h2>Leaderboard</h2>
         <p>Top players across all sessions</p>
       </div>
+
       <div class="facilitator-section">
         <div class="leaderboard-header">
           <div>RANK</div>
@@ -1155,10 +1183,11 @@
           <div>SCORE</div>
         </div>
         <div id="publicLeaderboard"></div>
-        <div id="emptyLeaderboard" style="text-align: center; padding: 40px 0; color: var(--text-secondary);">
+        <div id="emptyLeaderboard" class="empty-leaderboard" style="text-align: center; padding: 40px 0; color: var(--text-secondary);">
           No scores yet. Be the first to play!
         </div>
       </div>
+
       <div class="facilitator-section">
         <div class="facilitator-actions">
           <button class="btn-text" onclick="app.backToWelcome()">Back to Game</button>
@@ -1385,9 +1414,8 @@
         this.timerInterval = null;
         this.timeLeft = 90;
         this.facilitatorPlayers = [];
-        this.ghLeaderboard = new GitHubLeaderboard();
-        this.leaderboard = this.loadLeaderboard();
-        this.sessionId = null;
+        this.leaderboard = [];
+        this.playerId = null;
         this.modalCallback = null;
         this.clickCount = 0;
         this.clickTimeout = null;
@@ -1395,6 +1423,10 @@
 
         // Load remote leaderboard on startup
         this.syncFromGitHub();
+
+        // Listen for real-time leaderboard updates from Supabase
+        this.fetchLeaderboard();
+        this.setupRealtimeListener();
 
         // Listen for 5 clicks on logo for facilitator mode
         document.getElementById("screen-welcome").addEventListener("click", (e) => {
@@ -1407,6 +1439,25 @@
         document.getElementById("playerName").addEventListener("input", (e) => {
           document.getElementById("startBtn").disabled = !e.target.value.trim();
         });
+      }
+
+      async fetchLeaderboard() {
+        const { data } = await supabase
+          .from("leaderboard")
+          .select("*")
+          .order("score", { ascending: false })
+          .limit(50);
+        this.leaderboard = data || [];
+        this.renderPublicLeaderboard();
+      }
+
+      setupRealtimeListener() {
+        supabase
+          .channel("leaderboard-changes")
+          .on("postgres_changes", { event: "*", schema: "public", table: "leaderboard" }, () => {
+            this.fetchLeaderboard();
+          })
+          .subscribe();
       }
 
       handleLogoClick() {
@@ -1538,7 +1589,10 @@
         const score = this.scorePrompt(this.currentPrompt);
         this.scores.push(score);
         this.totalScore += score;
-        this.saveToLeaderboard(this.playerName, this.totalScore, this.scores.length);
+
+        // Update leaderboard after every round
+        this.saveToSupabase(this.playerName, this.totalScore, this.scores.length);
+
         this.showScoreReveal(score);
       }
 
@@ -1720,6 +1774,8 @@
 
       goToFacilitator() {
         this.showScreen("screen-facilitator");
+        // Sync facilitator view with shared data
+        this.facilitatorPlayers = this.leaderboard.map(p => ({ name: p.name, score: p.score }));
         this.renderLeaderboard();
         // Show current token status
         const tokenInput = document.getElementById("ghTokenInput");
@@ -1798,6 +1854,9 @@
         this.facilitatorPlayers.push({ name, score });
         this.facilitatorPlayers.sort((a, b) => b.score - a.score);
 
+        // Save to Supabase
+        this.saveToSupabase(name, score, 4);
+
         document.getElementById("facilName").value = "";
         document.getElementById("facilScore").value = "";
 
@@ -1845,24 +1904,24 @@
       confirmClearAll() {
         this.showModal(
           "Clear All Players?",
-          "This will remove all players from the leaderboard.",
+          "This will remove all players from the leaderboard, including saved scores.",
           () => {
             this.facilitatorPlayers = [];
+            this.leaderboard = [];
+            supabase.from("leaderboard").delete().neq("id", "00000000-0000-0000-0000-000000000000");
             this.renderLeaderboard();
           }
         );
       }
 
       backToWelcome() {
-        this.facilitatorPlayers = [];
         this.clickCount = 0;
         this.showScreen("screen-welcome");
       }
 
       reset() {
-        this.facilitatorPlayers = [];
         this.clickCount = 0;
-        this.sessionId = null;
+        this.playerId = null;
         this.showScreen("screen-welcome");
       }
 
@@ -1885,74 +1944,59 @@
         this.closeModal();
       }
 
-      loadLeaderboard() {
-        try { return JSON.parse(localStorage.getItem("promptGameLeaderboard") || "[]"); } catch { return []; }
-      }
-
-      async syncFromGitHub() {
-        if (this.syncInProgress) return;
-        this.syncInProgress = true;
-        try {
-          const remote = await this.ghLeaderboard.load();
-          if (remote && Array.isArray(remote)) {
-            // Merge remote with local: remote entries take priority, add local-only entries
-            const merged = [...remote];
-            const remoteSids = new Set(remote.map(e => e.sid));
-            this.leaderboard.forEach(local => {
-              if (local.sid && !remoteSids.has(local.sid)) {
-                merged.push(local);
-              }
-            });
-            merged.sort((a, b) => b.score - a.score);
-            this.leaderboard = merged.slice(0, 50);
-            try { localStorage.setItem("promptGameLeaderboard", JSON.stringify(this.leaderboard)); } catch {}
-          }
-        } catch (e) {
-          console.warn("GitHub sync failed:", e);
-        }
-        this.syncInProgress = false;
-      }
-
-      async saveToLeaderboard(name, score, roundsPlayed) {
-        if (!this.sessionId) this.sessionId = Date.now().toString();
-        const idx = this.leaderboard.findIndex(p => p.sid === this.sessionId);
-        const entry = { name, score, roundsPlayed, sid: this.sessionId, ts: new Date().toISOString() };
-        if (idx >= 0) this.leaderboard[idx] = entry; else this.leaderboard.push(entry);
-        this.leaderboard.sort((a, b) => b.score - a.score);
-        if (this.leaderboard.length > 50) this.leaderboard = this.leaderboard.slice(0, 50);
-        try { localStorage.setItem("promptGameLeaderboard", JSON.stringify(this.leaderboard)); } catch {}
-
-        // Push to GitHub
-        const saved = await this.ghLeaderboard.save(this.leaderboard);
-        if (saved) {
-          console.log("Leaderboard synced to GitHub");
+      // Supabase leaderboard methods
+      async saveToSupabase(name, score, roundsPlayed) {
+        if (this.playerId) {
+          await supabase
+            .from("leaderboard")
+            .update({ name, score, rounds_played: roundsPlayed, updated_at: new Date().toISOString() })
+            .eq("id", this.playerId);
+        } else {
+          const { data } = await supabase
+            .from("leaderboard")
+            .insert({ name, score, rounds_played: roundsPlayed })
+            .select("id")
+            .single();
+          if (data) this.playerId = data.id;
         }
       }
 
-      async viewLeaderboard() {
+      viewLeaderboard() {
         this.showScreen("screen-leaderboard");
+        this.renderPublicLeaderboard();
+      }
+
+      renderPublicLeaderboard() {
         const container = document.getElementById("publicLeaderboard");
         const emptyMsg = document.getElementById("emptyLeaderboard");
 
-        // Show loading state then refresh from GitHub
-        container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);">Loading leaderboard...</div>';
+        if (this.leaderboard.length === 0) {
+          container.innerHTML = "";
+          emptyMsg.style.display = "block";
+          return;
+        }
+
         emptyMsg.style.display = "none";
+        let html = "";
+        this.leaderboard.forEach((player, i) => {
+          let rankClass = "";
+          if (i === 0) rankClass = "first";
+          else if (i === 1) rankClass = "second";
+          else if (i === 2) rankClass = "third";
 
-        await this.syncFromGitHub();
+          const roundLabel = player.rounds_played < 4
+            ? ` <span style="font-size: 11px; color: var(--text-secondary);">(R${player.rounds_played}/4)</span>`
+            : "";
 
-        if (this.leaderboard.length === 0) { container.innerHTML = ""; emptyMsg.style.display = "block"; return; }
-        emptyMsg.style.display = "none";
-
-        const tokenConfigured = this.ghLeaderboard.getToken();
-        const syncStatus = tokenConfigured
-          ? '<div style="text-align:center;padding:8px;font-size:11px;color:var(--accent-success);">Synced with GitHub</div>'
-          : '<div style="text-align:center;padding:8px;font-size:11px;color:var(--text-secondary);">Read-only mode - configure token in Facilitator settings to enable sync</div>';
-
-        container.innerHTML = this.leaderboard.map((p, i) => {
-          const rc = i === 0 ? "first" : i === 1 ? "second" : i === 2 ? "third" : "";
-          const rl = p.roundsPlayed < 4 ? ` <span style="font-size:11px;color:var(--text-secondary);">(R${p.roundsPlayed}/4)</span>` : "";
-          return `<div class="leaderboard-row"><div class="rank ${rc}">${i+1}</div><div class="player-name">${p.name}${rl}</div><div class="player-score">${p.score}</div></div>`;
-        }).join("") + syncStatus;
+          html += `
+            <div class="leaderboard-row">
+              <div class="rank ${rankClass}">${i + 1}</div>
+              <div class="player-name">${player.name}${roundLabel}</div>
+              <div class="player-score">${player.score}</div>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
       }
 
       showScreen(screenId) {
