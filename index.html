@@ -4,6 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Prompt Is Right! - AI Prompting Game</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script>
+    // ============================================================
+    // FIREBASE CONFIGURATION
+    // To set up your own Firebase Realtime Database:
+    // 1. Go to https://console.firebase.google.com/
+    // 2. Create a new project (free tier is sufficient)
+    // 3. Go to Build > Realtime Database > Create Database
+    // 4. Set security rules to:
+    //    { "rules": { "leaderboard": { ".read": true, ".write": true } } }
+    // 5. Copy your config values below from Project Settings > General > Your apps > Web app
+    // ============================================================
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+      projectId: "YOUR_PROJECT",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const firebaseApp = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+  </script>
   <style>
     :root {
       --bg-primary: #0F172A;
@@ -1276,10 +1302,14 @@
         this.timerInterval = null;
         this.timeLeft = 90;
         this.facilitatorPlayers = [];
-        this.leaderboard = this.loadLeaderboard();
+        this.leaderboard = [];
+        this.playerId = null;
         this.modalCallback = null;
         this.clickCount = 0;
         this.clickTimeout = null;
+
+        // Listen for real-time leaderboard updates from Firebase
+        this.setupFirebaseListener();
 
         // Listen for 5 clicks on logo for facilitator mode
         document.getElementById("screen-welcome").addEventListener("click", (e) => {
@@ -1291,6 +1321,20 @@
         // Input validation
         document.getElementById("playerName").addEventListener("input", (e) => {
           document.getElementById("startBtn").disabled = !e.target.value.trim();
+        });
+      }
+
+      setupFirebaseListener() {
+        const ref = db.ref("leaderboard");
+        ref.orderByChild("score").on("value", (snapshot) => {
+          const entries = [];
+          snapshot.forEach((child) => {
+            entries.push({ key: child.key, ...child.val() });
+          });
+          // Sort descending by score, keep top 50
+          entries.sort((a, b) => b.score - a.score);
+          this.leaderboard = entries.slice(0, 50);
+          this.renderPublicLeaderboard();
         });
       }
 
@@ -1424,6 +1468,9 @@
         this.scores.push(score);
         this.totalScore += score;
 
+        // Update leaderboard after every round
+        this.saveToFirebase(this.playerName, this.totalScore, this.scores.length);
+
         this.showScoreReveal(score);
       }
 
@@ -1552,9 +1599,6 @@
       showFinalResults() {
         this.showScreen("screen-results");
 
-        // Auto-add to persistent leaderboard
-        this.addToLeaderboard(this.playerName, this.totalScore);
-
         document.getElementById("finalScore").textContent = this.totalScore;
         document.getElementById("finalScore").className = `final-score-number`;
 
@@ -1608,6 +1652,8 @@
 
       goToFacilitator() {
         this.showScreen("screen-facilitator");
+        // Sync facilitator view with Firebase data
+        this.facilitatorPlayers = this.leaderboard.map(p => ({ name: p.name, score: p.score }));
         this.renderLeaderboard();
       }
 
@@ -1620,8 +1666,8 @@
         this.facilitatorPlayers.push({ name, score });
         this.facilitatorPlayers.sort((a, b) => b.score - a.score);
 
-        // Also add to persistent leaderboard
-        this.addToLeaderboard(name, score);
+        // Save to Firebase
+        this.saveToFirebase(name, score, 4);
 
         document.getElementById("facilName").value = "";
         document.getElementById("facilScore").value = "";
@@ -1674,7 +1720,7 @@
           () => {
             this.facilitatorPlayers = [];
             this.leaderboard = [];
-            this.saveLeaderboard();
+            db.ref("leaderboard").remove();
             this.renderLeaderboard();
           }
         );
@@ -1687,6 +1733,7 @@
 
       reset() {
         this.clickCount = 0;
+        this.playerId = null;
         this.showScreen("screen-welcome");
       }
 
@@ -1709,32 +1756,27 @@
         this.closeModal();
       }
 
-      // Persistent leaderboard methods
-      loadLeaderboard() {
-        try {
-          const data = localStorage.getItem("promptGameLeaderboard");
-          return data ? JSON.parse(data) : [];
-        } catch {
-          return [];
+      // Firebase leaderboard methods
+      saveToFirebase(name, score, roundsPlayed) {
+        if (this.playerId) {
+          // Update existing entry for this player session
+          db.ref("leaderboard/" + this.playerId).update({
+            name,
+            score,
+            roundsPlayed,
+            updatedAt: new Date().toISOString()
+          });
+        } else {
+          // Create new entry
+          const newRef = db.ref("leaderboard").push({
+            name,
+            score,
+            roundsPlayed,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          this.playerId = newRef.key;
         }
-      }
-
-      saveLeaderboard() {
-        try {
-          localStorage.setItem("promptGameLeaderboard", JSON.stringify(this.leaderboard));
-        } catch {
-          // Storage full or unavailable
-        }
-      }
-
-      addToLeaderboard(name, score) {
-        this.leaderboard.push({ name, score, date: new Date().toISOString() });
-        this.leaderboard.sort((a, b) => b.score - a.score);
-        // Keep top 50
-        if (this.leaderboard.length > 50) {
-          this.leaderboard = this.leaderboard.slice(0, 50);
-        }
-        this.saveLeaderboard();
       }
 
       viewLeaderboard() {
@@ -1760,10 +1802,14 @@
           else if (i === 1) rankClass = "second";
           else if (i === 2) rankClass = "third";
 
+          const roundLabel = player.roundsPlayed < 4
+            ? ` <span style="font-size: 11px; color: var(--text-secondary);">(R${player.roundsPlayed}/4)</span>`
+            : "";
+
           html += `
             <div class="leaderboard-row">
               <div class="rank ${rankClass}">${i + 1}</div>
-              <div class="player-name">${player.name}</div>
+              <div class="player-name">${player.name}${roundLabel}</div>
               <div class="player-score">${player.score}</div>
             </div>
           `;
