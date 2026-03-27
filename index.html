@@ -1228,6 +1228,23 @@
           <button class="btn-text" onclick="app.backToWelcome()">Back to Game</button>
         </div>
       </div>
+
+      <div class="facilitator-section" style="border-top: 1px solid var(--border); padding-top: 24px; margin-top: 16px;">
+        <h3>GitHub Sync Settings</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin: 8px 0 16px;">
+          Connect to GitHub to share the leaderboard across all players. Enter a Personal Access Token with <code style="background:var(--bg-primary);padding:2px 6px;border-radius:4px;">repo</code> scope.
+        </p>
+        <form class="add-player-form" onsubmit="event.preventDefault(); app.saveGitHubToken()">
+          <input type="password" id="ghTokenInput" placeholder="ghp_xxxxxxxxxxxx" style="flex:2;">
+          <button class="btn-primary" type="submit">Save</button>
+        </form>
+        <div id="ghSyncStatus" style="font-size: 12px; margin-top: 8px; color: var(--text-secondary);"></div>
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+          <button class="btn-secondary" onclick="app.testGitHubConnection()" style="font-size: 13px;">Test Connection</button>
+          <button class="btn-secondary" onclick="app.syncLeaderboardToGitHub()" style="font-size: 13px;">Push Local Scores</button>
+          <button class="btn-text" onclick="app.clearGitHubToken()" style="font-size: 13px; color: var(--accent-danger);">Remove Token</button>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -1293,6 +1310,100 @@
       "Include examples of what 'good' looks like if possible."
     ];
 
+    // GitHub Blob Storage for persistent cross-user leaderboard
+    class GitHubLeaderboard {
+      constructor() {
+        this.owner = "on-the-ground-sg";
+        this.repo = "literate-memory";
+        this.path = "leaderboard.json";
+        this.branch = "main";
+        this.apiBase = "https://api.github.com";
+        this.sha = null; // track file SHA for updates
+        this.token = localStorage.getItem("ghLeaderboardToken") || "";
+      }
+
+      setToken(token) {
+        this.token = token;
+        localStorage.setItem("ghLeaderboardToken", token);
+      }
+
+      getToken() {
+        return this.token;
+      }
+
+      async load() {
+        try {
+          const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.path}?ref=${this.branch}&_=${Date.now()}`;
+          const headers = { "Accept": "application/vnd.github.v3+json" };
+          if (this.token) headers["Authorization"] = `token ${this.token}`;
+
+          const resp = await fetch(url, { headers });
+          if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+
+          const data = await resp.json();
+          this.sha = data.sha;
+          const content = atob(data.content.replace(/\n/g, ""));
+          return JSON.parse(content);
+        } catch (e) {
+          console.warn("GitHub leaderboard load failed, falling back to localStorage:", e);
+          return null;
+        }
+      }
+
+      async save(leaderboard) {
+        if (!this.token) {
+          console.warn("No GitHub token configured - leaderboard saved locally only");
+          return false;
+        }
+
+        try {
+          // Re-fetch to get latest SHA (avoid conflicts)
+          const getUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.path}?ref=${this.branch}&_=${Date.now()}`;
+          const getResp = await fetch(getUrl, {
+            headers: {
+              "Accept": "application/vnd.github.v3+json",
+              "Authorization": `token ${this.token}`
+            }
+          });
+
+          if (getResp.ok) {
+            const getData = await getResp.json();
+            this.sha = getData.sha;
+          }
+
+          const url = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.path}`;
+          const body = {
+            message: `Update leaderboard - ${new Date().toISOString()}`,
+            content: btoa(JSON.stringify(leaderboard, null, 2)),
+            branch: this.branch
+          };
+          if (this.sha) body.sha = this.sha;
+
+          const resp = await fetch(url, {
+            method: "PUT",
+            headers: {
+              "Accept": "application/vnd.github.v3+json",
+              "Authorization": `token ${this.token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.message || `GitHub API ${resp.status}`);
+          }
+
+          const result = await resp.json();
+          this.sha = result.content.sha;
+          return true;
+        } catch (e) {
+          console.error("GitHub leaderboard save failed:", e);
+          return false;
+        }
+      }
+    }
+
     class PromptGame {
       constructor() {
         this.currentRound = 0;
@@ -1308,6 +1419,10 @@
         this.modalCallback = null;
         this.clickCount = 0;
         this.clickTimeout = null;
+        this.syncInProgress = false;
+
+        // Load remote leaderboard on startup
+        this.syncFromGitHub();
 
         // Listen for real-time leaderboard updates from Supabase
         this.fetchLeaderboard();
@@ -1662,6 +1777,72 @@
         // Sync facilitator view with shared data
         this.facilitatorPlayers = this.leaderboard.map(p => ({ name: p.name, score: p.score }));
         this.renderLeaderboard();
+        // Show current token status
+        const tokenInput = document.getElementById("ghTokenInput");
+        const status = document.getElementById("ghSyncStatus");
+        if (this.ghLeaderboard.getToken()) {
+          tokenInput.placeholder = "Token saved (enter new to replace)";
+          status.textContent = "Token configured";
+          status.style.color = "var(--accent-success)";
+        }
+      }
+
+      saveGitHubToken() {
+        const token = document.getElementById("ghTokenInput").value.trim();
+        if (!token) return;
+        this.ghLeaderboard.setToken(token);
+        document.getElementById("ghTokenInput").value = "";
+        document.getElementById("ghTokenInput").placeholder = "Token saved (enter new to replace)";
+        const status = document.getElementById("ghSyncStatus");
+        status.textContent = "Token saved!";
+        status.style.color = "var(--accent-success)";
+      }
+
+      clearGitHubToken() {
+        this.ghLeaderboard.setToken("");
+        localStorage.removeItem("ghLeaderboardToken");
+        const status = document.getElementById("ghSyncStatus");
+        status.textContent = "Token removed";
+        status.style.color = "var(--text-secondary)";
+        document.getElementById("ghTokenInput").placeholder = "ghp_xxxxxxxxxxxx";
+      }
+
+      async testGitHubConnection() {
+        const status = document.getElementById("ghSyncStatus");
+        status.textContent = "Testing connection...";
+        status.style.color = "var(--text-secondary)";
+
+        const data = await this.ghLeaderboard.load();
+        if (data !== null) {
+          status.textContent = `Connected! ${data.length} entries on GitHub.`;
+          status.style.color = "var(--accent-success)";
+        } else {
+          status.textContent = "Failed to connect. Check token and try again.";
+          status.style.color = "var(--accent-danger)";
+        }
+      }
+
+      async syncLeaderboardToGitHub() {
+        const status = document.getElementById("ghSyncStatus");
+        if (!this.ghLeaderboard.getToken()) {
+          status.textContent = "Save a GitHub token first.";
+          status.style.color = "var(--accent-danger)";
+          return;
+        }
+
+        status.textContent = "Syncing...";
+        status.style.color = "var(--text-secondary)";
+
+        // Pull remote, merge, push
+        await this.syncFromGitHub();
+        const saved = await this.ghLeaderboard.save(this.leaderboard);
+        if (saved) {
+          status.textContent = `Synced! ${this.leaderboard.length} entries pushed to GitHub.`;
+          status.style.color = "var(--accent-success)";
+        } else {
+          status.textContent = "Sync failed. Check token permissions.";
+          status.style.color = "var(--accent-danger)";
+        }
       }
 
       addFacilitatorPlayer() {
