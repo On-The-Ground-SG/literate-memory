@@ -1021,6 +1021,7 @@
           Craft effective AI prompts in real-time scenarios. Learn what makes prompts work and compete for the top score!
         </p>
         <button class="btn-primary btn-block" onclick="app.goToNameEntry()">Start Playing</button>
+        <button class="btn-secondary btn-block" onclick="app.viewLeaderboard()">View Leaderboard</button>
         <div class="welcome-footer">AI SINGAPORE × AVPN</div>
       </div>
     </section>
@@ -1136,7 +1137,34 @@
 
       <div class="results-footer">
         <button class="btn-primary" onclick="app.showFullscreen()">SHOW SCORE</button>
+        <button class="btn-secondary" onclick="app.viewLeaderboard()">View Leaderboard</button>
         <button class="btn-text" onclick="app.reset()">Play Again</button>
+      </div>
+    </section>
+
+    <!-- Public Leaderboard Screen -->
+    <section class="screen screen-facilitator" id="screen-leaderboard">
+      <div class="facilitator-header">
+        <h2>Leaderboard</h2>
+        <p>Top players across all sessions</p>
+      </div>
+
+      <div class="facilitator-section">
+        <div class="leaderboard-header">
+          <div>RANK</div>
+          <div>NAME</div>
+          <div>SCORE</div>
+        </div>
+        <div id="publicLeaderboard"></div>
+        <div id="emptyLeaderboard" class="empty-leaderboard" style="text-align: center; padding: 40px 0; color: var(--text-secondary);">
+          No scores yet. Be the first to play!
+        </div>
+      </div>
+
+      <div class="facilitator-section">
+        <div class="facilitator-actions">
+          <button class="btn-text" onclick="app.backToWelcome()">Back to Game</button>
+        </div>
       </div>
     </section>
 
@@ -1248,6 +1276,7 @@
         this.timerInterval = null;
         this.timeLeft = 90;
         this.facilitatorPlayers = [];
+        this.leaderboard = this.loadLeaderboard();
         this.modalCallback = null;
         this.clickCount = 0;
         this.clickTimeout = null;
@@ -1523,6 +1552,9 @@
       showFinalResults() {
         this.showScreen("screen-results");
 
+        // Auto-add to persistent leaderboard
+        this.addToLeaderboard(this.playerName, this.totalScore);
+
         document.getElementById("finalScore").textContent = this.totalScore;
         document.getElementById("finalScore").className = `final-score-number`;
 
@@ -1588,6 +1620,9 @@
         this.facilitatorPlayers.push({ name, score });
         this.facilitatorPlayers.sort((a, b) => b.score - a.score);
 
+        // Also add to persistent leaderboard
+        this.addToLeaderboard(name, score);
+
         document.getElementById("facilName").value = "";
         document.getElementById("facilScore").value = "";
 
@@ -1635,22 +1670,22 @@
       confirmClearAll() {
         this.showModal(
           "Clear All Players?",
-          "This will remove all players from the leaderboard.",
+          "This will remove all players from the leaderboard, including saved scores.",
           () => {
             this.facilitatorPlayers = [];
+            this.leaderboard = [];
+            this.saveLeaderboard();
             this.renderLeaderboard();
           }
         );
       }
 
       backToWelcome() {
-        this.facilitatorPlayers = [];
         this.clickCount = 0;
         this.showScreen("screen-welcome");
       }
 
       reset() {
-        this.facilitatorPlayers = [];
         this.clickCount = 0;
         this.showScreen("screen-welcome");
       }
@@ -1672,6 +1707,68 @@
           this.modalCallback();
         }
         this.closeModal();
+      }
+
+      // Persistent leaderboard methods
+      loadLeaderboard() {
+        try {
+          const data = localStorage.getItem("promptGameLeaderboard");
+          return data ? JSON.parse(data) : [];
+        } catch {
+          return [];
+        }
+      }
+
+      saveLeaderboard() {
+        try {
+          localStorage.setItem("promptGameLeaderboard", JSON.stringify(this.leaderboard));
+        } catch {
+          // Storage full or unavailable
+        }
+      }
+
+      addToLeaderboard(name, score) {
+        this.leaderboard.push({ name, score, date: new Date().toISOString() });
+        this.leaderboard.sort((a, b) => b.score - a.score);
+        // Keep top 50
+        if (this.leaderboard.length > 50) {
+          this.leaderboard = this.leaderboard.slice(0, 50);
+        }
+        this.saveLeaderboard();
+      }
+
+      viewLeaderboard() {
+        this.showScreen("screen-leaderboard");
+        this.renderPublicLeaderboard();
+      }
+
+      renderPublicLeaderboard() {
+        const container = document.getElementById("publicLeaderboard");
+        const emptyMsg = document.getElementById("emptyLeaderboard");
+
+        if (this.leaderboard.length === 0) {
+          container.innerHTML = "";
+          emptyMsg.style.display = "block";
+          return;
+        }
+
+        emptyMsg.style.display = "none";
+        let html = "";
+        this.leaderboard.forEach((player, i) => {
+          let rankClass = "";
+          if (i === 0) rankClass = "first";
+          else if (i === 1) rankClass = "second";
+          else if (i === 2) rankClass = "third";
+
+          html += `
+            <div class="leaderboard-row">
+              <div class="rank ${rankClass}">${i + 1}</div>
+              <div class="player-name">${player.name}</div>
+              <div class="player-score">${player.score}</div>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
       }
 
       showScreen(screenId) {
