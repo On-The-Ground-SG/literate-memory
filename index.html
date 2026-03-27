@@ -4,33 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Prompt Is Right! - AI Prompting Game</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script>
-    // ============================================================
-    // SUPABASE CONFIGURATION
-    // 1. Go to https://supabase.com/ and create a free project
-    // 2. Go to SQL Editor and run:
-    //    create table leaderboard (
-    //      id uuid default gen_random_uuid() primary key,
-    //      name text not null,
-    //      score int not null default 0,
-    //      rounds_played int not null default 0,
-    //      created_at timestamptz default now(),
-    //      updated_at timestamptz default now()
-    //    );
-    //    alter table leaderboard enable row level security;
-    //    create policy "Public read" on leaderboard for select using (true);
-    //    create policy "Public insert" on leaderboard for insert with check (true);
-    //    create policy "Public update" on leaderboard for update using (true);
-    //    create policy "Public delete" on leaderboard for delete using (true);
-    // 3. Enable Realtime for the leaderboard table:
-    //    Go to Database > Replication, and toggle on the "leaderboard" table
-    // 4. Copy your URL and anon key from Settings > API
-    // ============================================================
-    const SUPABASE_URL = "https://nnbkdnswxtuckfelpuyq.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5uYmtkbnN3eHR1Y2tmZWxwdXlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxNjQ4MjQsImV4cCI6MjA4NDc0MDgyNH0.HIJErUg05lH0WipOn6OpGNwowLyMoOlJoMyN-yntaro";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  </script>
   <style>
     :root {
       --bg-primary: #0F172A;
@@ -1420,13 +1393,10 @@
         this.clickCount = 0;
         this.clickTimeout = null;
         this.syncInProgress = false;
+        this.ghLeaderboard = new GitHubLeaderboard();
 
-        // Load remote leaderboard on startup
+        // Load leaderboard on startup
         this.syncFromGitHub();
-
-        // Listen for real-time leaderboard updates from Supabase
-        this.fetchLeaderboard();
-        this.setupRealtimeListener();
 
         // Listen for 5 clicks on logo for facilitator mode
         document.getElementById("screen-welcome").addEventListener("click", (e) => {
@@ -1441,23 +1411,41 @@
         });
       }
 
-      async fetchLeaderboard() {
-        const { data } = await supabase
-          .from("leaderboard")
-          .select("*")
-          .order("score", { ascending: false })
-          .limit(50);
-        this.leaderboard = data || [];
-        this.renderPublicLeaderboard();
+      async syncFromGitHub() {
+        if (this.syncInProgress) return;
+        this.syncInProgress = true;
+        try {
+          const remote = await this.ghLeaderboard.load();
+          if (remote && remote.length > 0) {
+            // Merge remote into local by name, keeping highest score
+            const merged = new Map();
+            for (const p of this.leaderboard) merged.set(p.name, p);
+            for (const p of remote) {
+              const existing = merged.get(p.name);
+              if (!existing || p.score > existing.score) merged.set(p.name, p);
+            }
+            this.leaderboard = [...merged.values()].sort((a, b) => b.score - a.score);
+          }
+          // Also persist to localStorage
+          localStorage.setItem("leaderboard", JSON.stringify(this.leaderboard));
+          this.renderPublicLeaderboard();
+        } catch (e) {
+          console.warn("GitHub sync failed:", e);
+        } finally {
+          this.syncInProgress = false;
+        }
       }
 
-      setupRealtimeListener() {
-        supabase
-          .channel("leaderboard-changes")
-          .on("postgres_changes", { event: "*", schema: "public", table: "leaderboard" }, () => {
-            this.fetchLeaderboard();
-          })
-          .subscribe();
+      loadLocalLeaderboard() {
+        try {
+          const stored = localStorage.getItem("leaderboard");
+          if (stored) {
+            this.leaderboard = JSON.parse(stored);
+            this.renderPublicLeaderboard();
+          }
+        } catch (e) {
+          console.warn("Failed to load local leaderboard:", e);
+        }
       }
 
       handleLogoClick() {
@@ -1591,7 +1579,7 @@
         this.totalScore += score;
 
         // Update leaderboard after every round
-        this.saveToSupabase(this.playerName, this.totalScore, this.scores.length);
+        this.saveScore(this.playerName, this.totalScore, this.scores.length);
 
         this.showScoreReveal(score);
       }
@@ -1854,8 +1842,7 @@
         this.facilitatorPlayers.push({ name, score });
         this.facilitatorPlayers.sort((a, b) => b.score - a.score);
 
-        // Save to Supabase
-        this.saveToSupabase(name, score, 4);
+        this.saveScore(name, score, 4);
 
         document.getElementById("facilName").value = "";
         document.getElementById("facilScore").value = "";
@@ -1908,8 +1895,10 @@
           () => {
             this.facilitatorPlayers = [];
             this.leaderboard = [];
-            supabase.from("leaderboard").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+            localStorage.setItem("leaderboard", "[]");
+            this.ghLeaderboard.save([]);
             this.renderLeaderboard();
+            this.renderPublicLeaderboard();
           }
         );
       }
@@ -1944,21 +1933,19 @@
         this.closeModal();
       }
 
-      // Supabase leaderboard methods
-      async saveToSupabase(name, score, roundsPlayed) {
-        if (this.playerId) {
-          await supabase
-            .from("leaderboard")
-            .update({ name, score, rounds_played: roundsPlayed, updated_at: new Date().toISOString() })
-            .eq("id", this.playerId);
+      saveScore(name, score, roundsPlayed) {
+        const existing = this.leaderboard.find(p => p.name === name);
+        if (existing) {
+          existing.score = score;
+          existing.rounds_played = roundsPlayed;
         } else {
-          const { data } = await supabase
-            .from("leaderboard")
-            .insert({ name, score, rounds_played: roundsPlayed })
-            .select("id")
-            .single();
-          if (data) this.playerId = data.id;
+          this.leaderboard.push({ name, score, rounds_played: roundsPlayed });
         }
+        this.leaderboard.sort((a, b) => b.score - a.score);
+        localStorage.setItem("leaderboard", JSON.stringify(this.leaderboard));
+        this.renderPublicLeaderboard();
+        // Async push to GitHub (fire and forget)
+        this.ghLeaderboard.save(this.leaderboard);
       }
 
       viewLeaderboard() {
